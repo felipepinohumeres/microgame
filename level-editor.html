@@ -1,0 +1,473 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Editor De Niveles - Microgame</title>
+  <style>
+    :root {
+      --bg-a: #0b1220;
+      --bg-b: #16243d;
+      --panel: rgba(255, 255, 255, 0.08);
+      --panel-border: rgba(255, 255, 255, 0.18);
+      --text: #eaf2ff;
+      --accent: #78c4ff;
+      --good: #72e09c;
+      --warn: #ffcf66;
+      --danger: #ff8a8a;
+      --tile: #7ebc56;
+      --empty: #1f3558;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, var(--bg-a), var(--bg-b));
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .toolbar, .footer {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .layout {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 12px;
+    }
+
+    .canvas-wrap {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 8px;
+      overflow: auto;
+    }
+
+    #editorCanvas {
+      display: block;
+      background: #152844;
+      cursor: crosshair;
+      image-rendering: pixelated;
+      max-width: 100%;
+      height: auto;
+      touch-action: none;
+    }
+
+    body.nav-mode #editorCanvas {
+      touch-action: pan-x pan-y;
+    }
+
+    .side {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    button {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button:hover { background: rgba(255, 255, 255, 0.18); }
+    button.active { outline: 2px solid var(--accent); }
+
+    .back-link {
+      display: inline-block;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .back-link:hover { background: rgba(255, 255, 255, 0.18); }
+
+    .level-manager {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .level-manager select {
+      min-width: 170px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
+    .size-controls {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .size-controls input {
+      width: 74px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
+    .file-controls {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .file-controls input {
+      width: 160px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
+    .advanced-panel {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+    }
+
+    .advanced-summary {
+      cursor: pointer;
+      padding: 10px 12px;
+      font-weight: 800;
+      list-style: none;
+      user-select: none;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .advanced-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .advanced-content {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 0;
+      resize: none;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      padding: 8px;
+      color: #eaf2ff;
+      background: rgba(0, 0, 0, 0.22);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .hint { font-size: 12px; opacity: 0.85; }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .tile { background: var(--tile); }
+    .empty { background: var(--empty); }
+
+    .ok { color: var(--good); }
+    .warn { color: var(--warn); }
+    .danger { color: var(--danger); }
+
+    .touch-mode-switch {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 260;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      background: rgba(11, 18, 32, 0.9);
+      color: #eaf2ff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+      display: none;
+    }
+
+    .spawn-float {
+      position: fixed;
+      right: 12px;
+      bottom: 64px;
+      z-index: 255;
+      display: none;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 12px;
+      background: rgba(11, 18, 32, 0.92);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+      max-width: min(340px, calc(100vw - 24px));
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .spawn-float button {
+      min-width: 82px;
+      font-size: 12px;
+      padding: 8px 9px;
+    }
+
+    .bottom-panel {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 10px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .bottom-summary {
+      cursor: pointer;
+      padding: 10px 12px;
+      font-weight: 800;
+      list-style: none;
+      user-select: none;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .bottom-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .bottom-content {
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      .touch-mode-switch { display: inline-block; }
+      #editorCanvas { max-width: none; }
+      .canvas-wrap {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      body.draw-mode .spawn-float { display: flex; }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        padding: 8px;
+        gap: 8px;
+      }
+
+      .layout { grid-template-columns: 1fr; }
+      .side { min-height: 240px; }
+      textarea { min-height: 180px; }
+    }
+
+    @media (max-width: 720px) {
+      .toolbar {
+        position: sticky;
+        top: max(0px, env(safe-area-inset-top));
+        z-index: 200;
+        padding: 8px;
+        gap: 6px;
+        background: rgba(11, 18, 32, 0.97);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+      }
+
+      .layout {
+        position: relative;
+        z-index: 1;
+      }
+
+      button,
+      .back-link {
+        padding: 9px 10px;
+        font-size: 13px;
+      }
+
+      .level-manager,
+      .size-controls,
+      .file-controls {
+        width: 100%;
+      }
+
+      .level-manager {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      .level-manager select {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .size-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .size-controls button {
+        grid-column: 1 / -1;
+      }
+
+      .size-controls input {
+        width: 100%;
+      }
+
+      .file-controls {
+        display: grid;
+        grid-template-columns: 1fr auto;
+      }
+
+      .file-controls input {
+        width: 100%;
+      }
+
+      .canvas-wrap {
+        padding: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a class="back-link" href="./index.html">Volver Al Juego</a>
+    <button id="toolPaint" class="active">Pintar Suelo</button>
+    <button id="toolErase">Borrar</button>
+    <details class="advanced-panel">
+      <summary class="advanced-summary">Panel Avanzado</summary>
+      <div class="advanced-content">
+        <div class="level-manager">
+          <select id="levelSelect"></select>
+          <button id="btnLevelNew">Nuevo</button>
+          <button id="btnLevelDuplicate">Duplicar</button>
+          <button id="btnLevelRename">Renombrar</button>
+          <button id="btnLevelDelete">Eliminar</button>
+          <button id="btnLevelSetActive">Activar</button>
+        </div>
+        <div class="size-controls">
+          <input id="inputCols" type="number" min="20" max="300" step="1" placeholder="Ancho" />
+          <input id="inputRows" type="number" min="8" max="80" step="1" placeholder="Alto" />
+          <button id="btnResize">Aplicar Tamano</button>
+        </div>
+        <div class="file-controls">
+          <input id="inputLevelFile" type="text" placeholder="nivel-2" />
+          <button id="btnLoadFile">Cargar Archivo</button>
+        </div>
+        <button id="toolPlayer">Spawn Jugador</button>
+        <button id="toolEnemy">Spawn Enemy</button>
+        <button id="toolFlying">Spawn Flying</button>
+        <button id="toolCharger">Spawn Charger</button>
+        <button id="toolTurret">Spawn Turret</button>
+        <button id="toolBomber">Spawn Bomber</button>
+        <button id="toolEraseSpawn">Borrar Spawn</button>
+        <button id="btnGenerate">Generar Base</button>
+        <button id="btnClear">Limpiar</button>
+        <button id="btnSaveLocal">Guardar Local</button>
+        <button id="btnLoadLocal">Cargar Local</button>
+        <button id="btnExport">Exportar JSON</button>
+        <button id="btnCopy">Copiar JSON</button>
+        <button id="btnImport">Importar JSON</button>
+        <button id="btnDownload">Descargar .json</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="layout">
+    <div class="canvas-wrap">
+      <canvas id="editorCanvas" width="1920" height="272"></canvas>
+    </div>
+  </div>
+
+  <details class="bottom-panel">
+    <summary class="bottom-summary">Panel Inferior</summary>
+    <div class="bottom-content">
+      <aside class="side">
+        <div class="hint">
+          <div><span class="dot tile"></span> `0` = tile solido</div>
+          <div><span class="dot empty"></span> `-1` = vacio</div>
+        </div>
+        <div class="hint">
+          Arrastrar clic izquierdo: pintar herramienta actual<br />
+          Clic derecho: borrar rapido (tile o spawn cercano)
+        </div>
+        <textarea id="jsonArea" spellcheck="false"></textarea>
+        <div id="status" class="hint ok">Editor listo.</div>
+      </aside>
+
+      <div class="footer">
+        <span class="hint">Este editor guarda en `localStorage` con la clave `microgame_level_v1`.</span>
+        <span class="hint">El juego (`index.html`) lo carga automaticamente si existe.</span>
+      </div>
+    </div>
+  </details>
+
+  <div id="spawnFloat" class="spawn-float" aria-label="Herramientas flotantes de spawn">
+    <button type="button" data-tool-float="player">Jugador</button>
+    <button type="button" data-tool-float="enemy">Enemy</button>
+    <button type="button" data-tool-float="flying">Flying</button>
+    <button type="button" data-tool-float="charger">Charger</button>
+    <button type="button" data-tool-float="turret">Turret</button>
+    <button type="button" data-tool-float="bomber">Bomber</button>
+    <button type="button" data-tool-float="eraseSpawn">Borrar Spawn</button>
+  </div>
+
+  <button id="btnTouchMode" class="touch-mode-switch" type="button">Modo: Pintar</button>
+
+  <script src="./src/level-editor.js"></script>
+</body>
+</html>

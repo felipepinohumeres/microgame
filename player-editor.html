@@ -1,0 +1,114 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Editor De Parametros Del Jugador</title>
+  <style>
+    :root {
+      --bg-a: #0d1729;
+      --bg-b: #192f4c;
+      --panel: rgba(255,255,255,0.08);
+      --panel-border: rgba(255,255,255,0.2);
+      --text: #eaf2ff;
+      --ok: #72e09c;
+      --warn: #ffcf66;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--bg-a), var(--bg-b));
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .bar, .panel {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .link, button {
+      border: 1px solid rgba(255,255,255,0.24);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input {
+      border: 1px solid rgba(255,255,255,0.24);
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.2);
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    pre {
+      margin: 0;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.24);
+      overflow: auto;
+      font-size: 12px;
+    }
+
+    #status.ok { color: var(--ok); }
+    #status.warn { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a class="link" href="./index.html">Volver Al Juego</a>
+    <a class="link" href="./level-editor.html">Editor De Niveles</a>
+    <button id="btnSave">Guardar Parametros</button>
+    <button id="btnReset">Restaurar Defaults</button>
+    <span id="status" class="ok">Listo.</span>
+  </div>
+
+  <div class="panel">
+    <div class="grid" id="formGrid"></div>
+  </div>
+
+  <div class="panel">
+    <strong>JSON Guardado</strong>
+    <pre id="jsonOut"></pre>
+  </div>
+
+  <script src="./src/player-editor.js"></script>
+</body>
+</html>
