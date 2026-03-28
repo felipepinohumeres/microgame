@@ -1,12 +1,29 @@
 ﻿const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 17;
 const IS_TOUCH_DEVICE = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-const TILE_SIZE = IS_TOUCH_DEVICE ? 24 : 16;
+const TILE_SIZE = IS_TOUCH_DEVICE ? 24 : 44;
 const WORLD_TILE_SIZE = 32;
 
 const STORAGE_KEY = "microgame_level_v1";
 const LEVELS_STORAGE_KEY = "microgame_levels_v1";
 const ACTIVE_LEVEL_ID_KEY = "microgame_level_active_id";
+const TILE_DEFS_STORAGE_KEY = "microgame_tile_defs_v1";
+const ASSET_EXTENSIONS = [".png", ".svg", ".webp", ".jpg", ".jpeg"];
+const MUSIC_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
+const AVAILABLE_MUSIC_FILES = [
+  "./music/4.2-Light-Years.ogg",
+  "./music/Alley-Chase_v001_Looping.ogg",
+  "./music/Arcade-Goblins.ogg",
+  "./music/Bouncy-Platformer.ogg",
+  "./music/Cyber-City-of-Light_Looping.ogg",
+  "./music/Cyberpunk-Outlaws_Looping.ogg",
+  "./music/Enemy-Infiltration.ogg",
+  "./music/Future-Noir.ogg",
+  "./music/Invasion_Looping.ogg",
+  "./music/Lost-and-Faltering_Looping.ogg",
+  "./music/Pixel-Quirk.ogg",
+  "./music/Wild-Ride-Through-Tokyo.ogg"
+];
 
 const MIN_COLS = 20;
 const MAX_COLS = 300;
@@ -33,11 +50,29 @@ const canvas = document.getElementById("editorCanvas");
 const ctx = canvas.getContext("2d");
 const jsonArea = document.getElementById("jsonArea");
 const statusEl = document.getElementById("status");
+const tileLegendEl = document.getElementById("tileLegend");
 
 const levelSelect = document.getElementById("levelSelect");
 const inputCols = document.getElementById("inputCols");
 const inputRows = document.getElementById("inputRows");
+const paintTileTypeSelect = document.getElementById("paintTileType");
+const inputParallaxAnchor = document.getElementById("inputParallaxAnchor");
+const inputParallaxSky = document.getElementById("inputParallaxSky");
+const inputParallaxFar = document.getElementById("inputParallaxFar");
+const inputParallaxMid = document.getElementById("inputParallaxMid");
+const btnParallaxFilesApply = document.getElementById("btnParallaxFilesApply");
+const inputBgmFile = document.getElementById("inputBgmFile");
+const inputBgmSelect = document.getElementById("inputBgmSelect");
+const btnBgmApply = document.getElementById("btnBgmApply");
 const inputLevelFile = document.getElementById("inputLevelFile");
+const inputDecorImage = document.getElementById("inputDecorImage");
+const inputDecorX = document.getElementById("inputDecorX");
+const inputDecorY = document.getElementById("inputDecorY");
+const inputDecorScale = document.getElementById("inputDecorScale");
+const inputDecorAlpha = document.getElementById("inputDecorAlpha");
+const inputDecorDepth = document.getElementById("inputDecorDepth");
+const btnDecorApply = document.getElementById("btnDecorApply");
+const btnDecorClear = document.getElementById("btnDecorClear");
 const btnTouchMode = document.getElementById("btnTouchMode");
 const floatingToolButtons = Array.from(document.querySelectorAll("[data-tool-float]"));
 
@@ -45,6 +80,8 @@ const tools = {
   paint: document.getElementById("toolPaint"),
   erase: document.getElementById("toolErase"),
   player: document.getElementById("toolPlayer"),
+  entryLeft: document.getElementById("toolEntryLeft"),
+  entryRight: document.getElementById("toolEntryRight"),
   enemy: document.getElementById("toolEnemy"),
   flying: document.getElementById("toolFlying"),
   charger: document.getElementById("toolCharger"),
@@ -59,24 +96,45 @@ let tool = "paint";
 let isPointerDown = false;
 let activePointerId = null;
 let touchDrawEnabled = false;
+let paintTileType = 0;
 let grid = createEmptyGrid(levelCols, levelRows);
 let levelEntities = getDefaultEntities();
+let levelParallaxAnchor = "top";
+let levelParallaxFiles = getDefaultParallaxFiles();
+let levelBgmFile = getDefaultBgmFile();
+let levelDecorLayer = null;
+let tileDefinitions = loadTileDefinitions();
 
 let levelsState = loadLevelsState();
 let currentLevelId = resolveCurrentLevelId(levelsState);
 
 wireUI();
+syncTileDefinitionsUI();
+syncBgmSelect();
 applyCurrentLevelFromCatalog();
 refreshLevelSelect();
 syncSizeInputs();
 render();
 setStatus("Editor listo.", "ok");
 syncTouchModeUI();
+window.addEventListener("focus", () => {
+  tileDefinitions = loadTileDefinitions();
+  syncTileDefinitionsUI();
+  render();
+});
 
 function wireUI() {
   Object.entries(tools).forEach(([key, btn]) => {
     btn.addEventListener("click", () => setTool(key));
   });
+
+  if (paintTileTypeSelect) {
+    paintTileTypeSelect.addEventListener("change", () => {
+      const nextType = normalizeTileValue(Number(paintTileTypeSelect.value));
+      paintTileType = nextType < 0 ? 0 : nextType;
+      setStatus(`Tile de pintura: ${paintTileType}.`, "ok");
+    });
+  }
 
   levelSelect.addEventListener("change", () => {
     saveCurrentIntoCatalog();
@@ -189,6 +247,87 @@ function wireUI() {
     render();
     setStatus(`Tamano actualizado a ${levelCols}x${levelRows}.`, "ok");
   });
+
+  if (inputParallaxAnchor) {
+    inputParallaxAnchor.addEventListener("change", () => {
+      levelParallaxAnchor = inputParallaxAnchor.value === "bottom" ? "bottom" : "top";
+      setStatus(`Parallax anclado: ${levelParallaxAnchor === "bottom" ? "abajo" : "arriba"}.`, "ok");
+    });
+  }
+
+  if (btnParallaxFilesApply) {
+    btnParallaxFilesApply.addEventListener("click", async () => {
+      const current = normalizeParallaxFiles(levelParallaxFiles);
+      const nextSky = await resolveAssetInputToPath(inputParallaxSky?.value, current.sky);
+      const nextFar = await resolveAssetInputToPath(inputParallaxFar?.value, current.far);
+      const nextMid = await resolveAssetInputToPath(inputParallaxMid?.value, current.mid);
+      levelParallaxFiles = normalizeParallaxFiles({
+        sky: nextSky,
+        far: nextFar,
+        mid: nextMid
+      });
+      syncParallaxInputs();
+      setStatus("Archivos de parallax actualizados.", "ok");
+    });
+  }
+
+  if (btnBgmApply) {
+    btnBgmApply.addEventListener("click", async () => {
+      levelBgmFile = await resolveMusicInputToPath(inputBgmFile?.value, levelBgmFile);
+      syncBgmInput();
+      setStatus("Archivo de musica de fondo actualizado.", "ok");
+    });
+  }
+
+  if (inputBgmSelect) {
+    inputBgmSelect.addEventListener("change", () => {
+      const selected = (inputBgmSelect.value || "").trim();
+      if (!selected) {
+        return;
+      }
+      levelBgmFile = selected;
+      syncBgmInput();
+      setStatus("BGM seleccionado desde archivos disponibles.", "ok");
+    });
+  }
+
+  if (btnDecorApply) {
+    btnDecorApply.addEventListener("click", async () => {
+      const imageInput = (inputDecorImage.value || "").trim();
+      if (!imageInput) {
+        setStatus("Indica la ruta de imagen para la capa decorativa.", "warn");
+        return;
+      }
+      const image = await resolveAssetInputToPath(imageInput, "");
+      if (!image) {
+        setStatus("No se encontro archivo para la capa decorativa en ./assets.", "warn");
+        return;
+      }
+
+      const maxX = levelCols * WORLD_TILE_SIZE;
+      const maxY = levelRows * WORLD_TILE_SIZE;
+      levelDecorLayer = {
+        image,
+        x: clampNumber(Number(inputDecorX.value), 0, maxX, 0),
+        y: clampNumber(Number(inputDecorY.value), 0, maxY, 0),
+        scale: clampFloat(Number(inputDecorScale.value), 0.1, 8, 1),
+        alpha: clampFloat(Number(inputDecorAlpha.value), 0, 1, 1),
+        depth: clampFloat(Number(inputDecorDepth.value), -10, 20, 2.6)
+      };
+      syncDecorInputs();
+      render();
+      setStatus("Capa decorativa actualizada.", "ok");
+    });
+  }
+
+  if (btnDecorClear) {
+    btnDecorClear.addEventListener("click", () => {
+      levelDecorLayer = null;
+      syncDecorInputs();
+      render();
+      setStatus("Capa decorativa eliminada.", "warn");
+    });
+  }
 
   document.getElementById("btnLoadFile").addEventListener("click", async () => {
     const rawName = (inputLevelFile.value || "").trim();
@@ -305,6 +444,19 @@ function wireUI() {
     setStatus("Archivo JSON descargado.", "ok");
   });
 
+  document.getElementById("btnDownloadSvgGuide").addEventListener("click", () => {
+    const levelName = safeName(getCurrentRecord()?.name || "level");
+    const svg = buildGroundGuideSvg(levelName);
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${levelName}_guia_suelo.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("Guia SVG descargada para Illustrator.", "ok");
+  });
+
   if (btnTouchMode) {
     btnTouchMode.addEventListener("click", () => {
       touchDrawEnabled = !touchDrawEnabled;
@@ -391,6 +543,76 @@ function syncSizeInputs() {
   inputRows.value = String(levelRows);
 }
 
+function syncParallaxInputs() {
+  if (inputParallaxAnchor) {
+    inputParallaxAnchor.value = levelParallaxAnchor;
+  }
+  if (inputParallaxSky) {
+    inputParallaxSky.value = extractAssetBaseName(levelParallaxFiles.sky);
+  }
+  if (inputParallaxFar) {
+    inputParallaxFar.value = extractAssetBaseName(levelParallaxFiles.far);
+  }
+  if (inputParallaxMid) {
+    inputParallaxMid.value = extractAssetBaseName(levelParallaxFiles.mid);
+  }
+}
+
+function syncBgmInput() {
+  if (!inputBgmFile) {
+    return;
+  }
+  inputBgmFile.value = extractAssetBaseName(levelBgmFile);
+  syncBgmSelect();
+}
+
+function syncBgmSelect() {
+  if (!inputBgmSelect) {
+    return;
+  }
+
+  const options = [
+    { value: "", label: "BGM disponible..." },
+    ...AVAILABLE_MUSIC_FILES.map((path) => ({
+      value: path,
+      label: extractAssetBaseName(path)
+    }))
+  ];
+
+  inputBgmSelect.innerHTML = "";
+  options.forEach((optionDef) => {
+    const option = document.createElement("option");
+    option.value = optionDef.value;
+    option.textContent = optionDef.label;
+    inputBgmSelect.appendChild(option);
+  });
+
+  const normalizedCurrent = normalizeBgmFile(levelBgmFile);
+  const hasCurrent = AVAILABLE_MUSIC_FILES.some((path) => path === normalizedCurrent);
+  inputBgmSelect.value = hasCurrent ? normalizedCurrent : "";
+}
+
+function syncDecorInputs() {
+  if (!inputDecorImage) {
+    return;
+  }
+  if (!levelDecorLayer) {
+    inputDecorImage.value = "";
+    inputDecorX.value = "0";
+    inputDecorY.value = "0";
+    inputDecorScale.value = "1";
+    inputDecorAlpha.value = "1";
+    inputDecorDepth.value = "2.6";
+    return;
+  }
+  inputDecorImage.value = extractAssetBaseName(levelDecorLayer.image);
+  inputDecorX.value = String(levelDecorLayer.x);
+  inputDecorY.value = String(levelDecorLayer.y);
+  inputDecorScale.value = String(levelDecorLayer.scale);
+  inputDecorAlpha.value = String(levelDecorLayer.alpha);
+  inputDecorDepth.value = String(levelDecorLayer.depth);
+}
+
 function setCanvasSize() {
   canvas.width = levelCols * TILE_SIZE;
   canvas.height = levelRows * TILE_SIZE;
@@ -413,11 +635,14 @@ function resizeLevel(newCols, newRows) {
   const maxY = levelRows * WORLD_TILE_SIZE;
 
   levelEntities.playerSpawn = clampPoint(levelEntities.playerSpawn, DEFAULT_PLAYER_SPAWN, maxX, maxY);
+  levelEntities.entrySpawnFromLeft = clampPoint(levelEntities.entrySpawnFromLeft, null, maxX, maxY);
+  levelEntities.entrySpawnFromRight = clampPoint(levelEntities.entrySpawnFromRight, null, maxX, maxY);
   levelEntities.enemySpawns = levelEntities.enemySpawns.filter((p) => p.x >= 0 && p.x <= maxX && p.y >= 0 && p.y <= maxY);
   levelEntities.chargerSpawns = levelEntities.chargerSpawns.filter((p) => p.x >= 0 && p.x <= maxX && p.y >= 0 && p.y <= maxY);
   levelEntities.turretSpawns = levelEntities.turretSpawns.filter((p) => p.x >= 0 && p.x <= maxX && p.y >= 0 && p.y <= maxY);
   levelEntities.flyingSpawns = levelEntities.flyingSpawns.filter((p) => p.x >= 0 && p.x <= maxX && p.y >= 0 && p.y <= maxY);
   levelEntities.bomberSpawns = levelEntities.bomberSpawns.filter((p) => p.x >= 0 && p.x <= maxX && p.y >= 0 && p.y <= maxY);
+  levelDecorLayer = normalizeDecorLayer(levelDecorLayer, maxX, maxY);
 
   setCanvasSize();
 }
@@ -429,7 +654,7 @@ function actAtPointer(event, forceErase) {
   }
 
   if (tool === "paint" || tool === "erase") {
-    const value = forceErase || tool === "erase" ? -1 : 0;
+    const value = forceErase || tool === "erase" ? -1 : paintTileType;
     grid[pos.gridY][pos.gridX] = value;
     render();
     return;
@@ -469,6 +694,14 @@ function placeSpawnForTool(currentTool, x, y) {
     levelEntities.playerSpawn = { x, y };
     return;
   }
+  if (currentTool === "entryLeft") {
+    levelEntities.entrySpawnFromLeft = { x, y };
+    return;
+  }
+  if (currentTool === "entryRight") {
+    levelEntities.entrySpawnFromRight = { x, y };
+    return;
+  }
   if (currentTool === "enemy") {
     pushUniquePoint(levelEntities.enemySpawns, x, y);
     return;
@@ -493,6 +726,12 @@ function placeSpawnForTool(currentTool, x, y) {
 function eraseNearestSpawn(x, y) {
   const candidates = [];
   candidates.push({ type: "playerSpawn", index: -1, x: levelEntities.playerSpawn.x, y: levelEntities.playerSpawn.y });
+  if (levelEntities.entrySpawnFromLeft) {
+    candidates.push({ type: "entrySpawnFromLeft", index: -1, x: levelEntities.entrySpawnFromLeft.x, y: levelEntities.entrySpawnFromLeft.y });
+  }
+  if (levelEntities.entrySpawnFromRight) {
+    candidates.push({ type: "entrySpawnFromRight", index: -1, x: levelEntities.entrySpawnFromRight.x, y: levelEntities.entrySpawnFromRight.y });
+  }
 
   levelEntities.enemySpawns.forEach((s, i) => candidates.push({ type: "enemySpawns", index: i, x: s.x, y: s.y }));
   levelEntities.chargerSpawns.forEach((s, i) => candidates.push({ type: "chargerSpawns", index: i, x: s.x, y: s.y }));
@@ -519,6 +758,14 @@ function eraseNearestSpawn(x, y) {
     levelEntities.playerSpawn = { ...DEFAULT_PLAYER_SPAWN };
     return;
   }
+  if (best.type === "entrySpawnFromLeft") {
+    levelEntities.entrySpawnFromLeft = null;
+    return;
+  }
+  if (best.type === "entrySpawnFromRight") {
+    levelEntities.entrySpawnFromRight = null;
+    return;
+  }
 
   levelEntities[best.type].splice(best.index, 1);
 }
@@ -539,7 +786,7 @@ function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < levelRows; y += 1) {
     for (let x = 0; x < levelCols; x += 1) {
-      ctx.fillStyle = grid[y][x] === 0 ? "#7ebc56" : "#1f3558";
+      ctx.fillStyle = getTileColor(grid[y][x]);
       ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
   }
@@ -560,7 +807,16 @@ function drawGrid() {
 }
 
 function drawSpawns() {
+  if (levelDecorLayer) {
+    drawMarker(levelDecorLayer.x, levelDecorLayer.y, "#c8b8ff", "D");
+  }
   drawMarker(levelEntities.playerSpawn.x, levelEntities.playerSpawn.y, "#4aa3ff", "P");
+  if (levelEntities.entrySpawnFromLeft) {
+    drawMarker(levelEntities.entrySpawnFromLeft.x, levelEntities.entrySpawnFromLeft.y, "#6ed9ff", "L");
+  }
+  if (levelEntities.entrySpawnFromRight) {
+    drawMarker(levelEntities.entrySpawnFromRight.x, levelEntities.entrySpawnFromRight.y, "#67c8ff", "R");
+  }
   levelEntities.enemySpawns.forEach((s) => drawMarker(s.x, s.y, "#ff6d4a", "E"));
   levelEntities.flyingSpawns.forEach((s) => drawMarker(s.x, s.y, "#8be1ff", "F"));
   levelEntities.chargerSpawns.forEach((s) => drawMarker(s.x, s.y, "#ffb36b", "C"));
@@ -761,6 +1017,8 @@ function getDefaultEntities(cols, rows) {
   const maxY = rows * WORLD_TILE_SIZE;
   return {
     playerSpawn: clampPoint(DEFAULT_PLAYER_SPAWN, DEFAULT_PLAYER_SPAWN, maxX, maxY),
+    entrySpawnFromLeft: null,
+    entrySpawnFromRight: null,
     enemySpawns: DEFAULT_ENEMY_SPAWNS.filter((x) => x >= 0 && x <= maxX).map((x) => ({ x, y: 60 })),
     flyingSpawns: DEFAULT_FLYING_SPAWNS.filter((s) => s.x >= 0 && s.x <= maxX && s.y >= 0 && s.y <= maxY).map((s) => ({ ...s })),
     chargerSpawns: DEFAULT_CHARGER_SPAWNS.filter((x) => x >= 0 && x <= maxX).map((x) => ({ x, y: 60 })),
@@ -774,6 +1032,10 @@ function getDefaultLevelPayload(cols, rows) {
     cols,
     rows,
     tileSize: WORLD_TILE_SIZE,
+    parallaxAnchor: "top",
+    parallaxFiles: getDefaultParallaxFiles(),
+    bgmFile: getDefaultBgmFile(),
+    decorLayer: null,
     data: buildDefaultGrid(cols, rows),
     ...getDefaultEntities(cols, rows)
   };
@@ -784,6 +1046,10 @@ function toExportObject() {
     cols: levelCols,
     rows: levelRows,
     tileSize: WORLD_TILE_SIZE,
+    parallaxAnchor: levelParallaxAnchor,
+    parallaxFiles: { ...levelParallaxFiles },
+    bgmFile: levelBgmFile,
+    decorLayer: levelDecorLayer ? { ...levelDecorLayer } : null,
     data: grid,
     ...levelEntities
   };
@@ -812,7 +1078,7 @@ function parseLevel(raw) {
       if (!Array.isArray(row) || row.length !== cols) {
         throw new Error("invalid row");
       }
-      return row.map((cell) => (cell === 0 ? 0 : -1));
+      return row.map((cell) => normalizeTileValue(cell));
     });
 
     const maxX = cols * WORLD_TILE_SIZE;
@@ -822,8 +1088,14 @@ function parseLevel(raw) {
     return {
       cols,
       rows,
+      parallaxAnchor: obj.parallaxAnchor === "bottom" ? "bottom" : "top",
+      parallaxFiles: normalizeParallaxFiles(obj.parallaxFiles),
+      bgmFile: normalizeBgmFile(obj.bgmFile),
+      decorLayer: normalizeDecorLayer(obj.decorLayer, maxX, maxY),
       data: normalizedGrid,
       playerSpawn: clampPoint(obj.playerSpawn, defaults.playerSpawn, maxX, maxY),
+      entrySpawnFromLeft: clampPoint(obj.entrySpawnFromLeft, defaults.entrySpawnFromLeft, maxX, maxY),
+      entrySpawnFromRight: clampPoint(obj.entrySpawnFromRight, defaults.entrySpawnFromRight, maxX, maxY),
       enemySpawns: normalizeSpawnArray(obj.enemySpawns, defaults.enemySpawns, maxX, maxY, 60),
       flyingSpawns: normalizePointArray(obj.flyingSpawns, defaults.flyingSpawns, maxX, maxY),
       chargerSpawns: normalizeSpawnArray(obj.chargerSpawns, defaults.chargerSpawns, maxX, maxY, 60),
@@ -838,9 +1110,18 @@ function parseLevel(raw) {
 function applyParsedLevel(parsed) {
   levelCols = parsed.cols;
   levelRows = parsed.rows;
+  levelParallaxAnchor = parsed.parallaxAnchor === "bottom" ? "bottom" : "top";
+  levelParallaxFiles = normalizeParallaxFiles(parsed.parallaxFiles);
+  levelBgmFile = normalizeBgmFile(parsed.bgmFile);
+  syncParallaxInputs();
+  syncBgmInput();
+  levelDecorLayer = parsed.decorLayer ? { ...parsed.decorLayer } : null;
+  syncDecorInputs();
   grid = parsed.data;
   levelEntities = {
     playerSpawn: parsed.playerSpawn,
+    entrySpawnFromLeft: parsed.entrySpawnFromLeft,
+    entrySpawnFromRight: parsed.entrySpawnFromRight,
     enemySpawns: parsed.enemySpawns,
     flyingSpawns: parsed.flyingSpawns,
     chargerSpawns: parsed.chargerSpawns,
@@ -899,6 +1180,23 @@ function clampPoint(value, fallback, maxX, maxY) {
   return { x, y };
 }
 
+function normalizeTileValue(value) {
+  const num = Number(value);
+  const maxId = tileDefinitions.reduce((max, item) => Math.max(max, item.id), 3);
+  if (Number.isInteger(num) && num >= 0 && num <= maxId) {
+    return num;
+  }
+  return -1;
+}
+
+function getTileColor(value) {
+  const tileDef = tileDefinitions.find((item) => item.id === value);
+  if (tileDef && typeof tileDef.color === "string") {
+    return tileDef.color;
+  }
+  return "#1f3558";
+}
+
 function clampNumber(value, min, max, fallback) {
   if (!Number.isFinite(value)) {
     return fallback;
@@ -906,8 +1204,258 @@ function clampNumber(value, min, max, fallback) {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
+function clampFloat(value, min, max, fallback) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeDecorLayer(value, maxX, maxY) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const image = typeof value.image === "string" ? value.image.trim() : "";
+  if (!image) {
+    return null;
+  }
+  return {
+    image,
+    x: clampNumber(Number(value.x), 0, maxX, 0),
+    y: clampNumber(Number(value.y), 0, maxY, 0),
+    scale: clampFloat(Number(value.scale), 0.1, 8, 1),
+    alpha: clampFloat(Number(value.alpha), 0, 1, 1),
+    depth: clampFloat(Number(value.depth), -10, 20, 2.6)
+  };
+}
+
+function getDefaultParallaxFiles() {
+  return {
+    sky: "./assets/bg_sky.svg",
+    far: "./assets/bg_far.png",
+    mid: "./assets/bg_mountains.png"
+  };
+}
+
+function getDefaultBgmFile() {
+  return "./music/Arcade-Goblins.ogg";
+}
+
+function normalizeBgmFile(value) {
+  if (typeof value !== "string") {
+    return getDefaultBgmFile();
+  }
+  const trimmed = value.trim();
+  return trimmed || getDefaultBgmFile();
+}
+
+function normalizeParallaxFiles(value) {
+  const defaults = getDefaultParallaxFiles();
+  if (!value || typeof value !== "object") {
+    return { ...defaults };
+  }
+  const clean = (candidate, fallback) => {
+    if (typeof candidate !== "string") {
+      return fallback;
+    }
+    const trimmed = candidate.trim();
+    return trimmed || fallback;
+  };
+  return {
+    sky: clean(value.sky, defaults.sky),
+    far: clean(value.far, defaults.far),
+    mid: clean(value.mid, defaults.mid)
+  };
+}
+
+async function resolveAssetInputToPath(value, fallbackPath) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) {
+    return fallbackPath || "";
+  }
+
+  if (raw.includes("/") || raw.includes("\\") || /\.[a-z0-9]+$/i.test(raw)) {
+    return raw;
+  }
+
+  for (const ext of ASSET_EXTENSIONS) {
+    const candidate = `./assets/${raw}${ext}`;
+    try {
+      const response = await fetch(candidate, { method: "GET", cache: "no-store" });
+      if (response.ok) {
+        return candidate;
+      }
+    } catch {
+      return fallbackPath || "";
+    }
+  }
+
+  return fallbackPath || `./assets/${raw}.png`;
+}
+
+async function resolveMusicInputToPath(value, fallbackPath) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) {
+    return fallbackPath || getDefaultBgmFile();
+  }
+
+  if (raw.includes("/") || raw.includes("\\") || /\.[a-z0-9]+$/i.test(raw)) {
+    return raw;
+  }
+
+  for (const ext of MUSIC_EXTENSIONS) {
+    const candidate = `./music/${raw}${ext}`;
+    try {
+      const response = await fetch(candidate, { method: "GET", cache: "no-store" });
+      if (response.ok) {
+        return candidate;
+      }
+    } catch {
+      return fallbackPath || getDefaultBgmFile();
+    }
+  }
+
+  return fallbackPath || `./music/${raw}.ogg`;
+}
+
+function extractAssetBaseName(path) {
+  if (typeof path !== "string" || !path.trim()) {
+    return "";
+  }
+  const clean = path.trim().replace(/\\/g, "/");
+  const fileName = clean.split("/").pop() || clean;
+  return fileName.replace(/\.[^/.]+$/, "");
+}
+
+function getDefaultTileDefinitions() {
+  return [
+    { id: 0, name: "Piso", color: "#7ebc56" },
+    { id: 1, name: "Bloque rompible", color: "#8f7a66" },
+    { id: 2, name: "Piso resbaladizo", color: "#6d8ba9" },
+    { id: 3, name: "Atravesable", color: "#b88ad1" },
+    { id: 4, name: "Plataforma animada", color: "#5ab4ff" }
+  ];
+}
+
+function loadTileDefinitions() {
+  const defaults = getDefaultTileDefinitions();
+  try {
+    const raw = localStorage.getItem(TILE_DEFS_STORAGE_KEY);
+    if (!raw) {
+      return defaults;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return defaults;
+    }
+    const safe = parsed
+      .map((item) => {
+        const id = Number(item?.id);
+        if (!Number.isInteger(id) || id < 0) {
+          return null;
+        }
+        const fallback = defaults.find((entry) => entry.id === id);
+        const name = typeof item.name === "string" && item.name.trim()
+          ? item.name.trim()
+          : (fallback?.name || `Tile ${id}`);
+        const color = typeof item.color === "string" && item.color.trim()
+          ? item.color.trim()
+          : (fallback?.color || "#7ebc56");
+        return { id, name, color };
+      })
+      .filter((item) => item !== null);
+
+    if (!safe.length) {
+      return defaults;
+    }
+
+    const merged = [...safe];
+    const existingIds = new Set(merged.map((item) => item.id));
+    defaults.forEach((base) => {
+      if (!existingIds.has(base.id)) {
+        merged.push({ ...base });
+      }
+    });
+
+    return merged.sort((a, b) => a.id - b.id);
+  } catch {
+    return defaults;
+  }
+}
+
+function syncTileDefinitionsUI() {
+  if (paintTileTypeSelect) {
+    paintTileTypeSelect.innerHTML = "";
+    tileDefinitions.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = String(item.id);
+      option.textContent = `Tile ${item.id}: ${item.name}`;
+      paintTileTypeSelect.appendChild(option);
+    });
+    const hasCurrent = tileDefinitions.some((item) => item.id === paintTileType);
+    paintTileType = hasCurrent ? paintTileType : tileDefinitions[0]?.id ?? 0;
+    paintTileTypeSelect.value = String(paintTileType);
+  }
+
+  if (tileLegendEl) {
+    const lines = tileDefinitions
+      .map((item) => (
+        `<div><span class="dot" style="background:${escapeHtml(item.color)}"></span>\`${item.id}\` = ${escapeHtml(item.name)}</div>`
+      ))
+      .join("");
+    tileLegendEl.innerHTML = `${lines}<div><span class="dot empty"></span>\`-1\` = vacio</div>`;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function setStatus(message, type) {
   statusEl.textContent = message;
   statusEl.classList.remove("ok", "warn", "danger");
   statusEl.classList.add(type || "ok");
+}
+
+function buildGroundGuideSvg(levelName) {
+  const widthPx = levelCols * WORLD_TILE_SIZE;
+  const heightPx = levelRows * WORLD_TILE_SIZE;
+  const tileRects = [];
+
+  for (let y = 0; y < levelRows; y += 1) {
+    for (let x = 0; x < levelCols; x += 1) {
+      if (grid[y][x] === 0) {
+        tileRects.push(`<rect x="${x * WORLD_TILE_SIZE}" y="${y * WORLD_TILE_SIZE}" width="${WORLD_TILE_SIZE}" height="${WORLD_TILE_SIZE}" />`);
+      }
+    }
+  }
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">`,
+    "  <defs>",
+    "    <style>",
+    "      .ground { fill: #57b84f; fill-opacity: 0.28; stroke: #2d6a30; stroke-width: 1; }",
+    "      .frame { fill: none; stroke: #1c2b3a; stroke-width: 2; }",
+    "      .label { fill: #1c2b3a; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-size: 18px; }",
+    "    </style>",
+    "  </defs>",
+    `  <rect class="frame" x="1" y="1" width="${Math.max(0, widthPx - 2)}" height="${Math.max(0, heightPx - 2)}" />`,
+    `  <text class="label" x="14" y="26">${escapeXml(`Guia suelo: ${levelName} (${levelCols}x${levelRows} tiles)`)}</text>`,
+    `  <g class="ground">${tileRects.join("")}</g>`,
+    "</svg>"
+  ].join("\n");
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }

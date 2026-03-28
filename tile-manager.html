@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestor De Tiles - Microgame</title>
+  <style>
+    :root {
+      --bg-a: #0b1220;
+      --bg-b: #16243d;
+      --panel: rgba(255, 255, 255, 0.08);
+      --panel-border: rgba(255, 255, 255, 0.18);
+      --text: #eaf2ff;
+      --ok: #72e09c;
+      --warn: #ffcf66;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 16px;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, var(--bg-a), var(--bg-b));
+      display: grid;
+      gap: 12px;
+      grid-template-rows: auto auto 1fr auto;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back-link, button {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover, .back-link:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      padding: 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
+    input[type="color"] {
+      width: 52px;
+      height: 34px;
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+
+    .status { font-size: 13px; opacity: 0.9; }
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="panel row">
+    <a class="back-link" href="./index.html">Volver Al Juego</a>
+    <a class="back-link" href="./level-editor.html">Editor De Niveles</a>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="btnSave">Guardar Configuracion</button>
+      <button id="btnAdd">Agregar Tile</button>
+      <button id="btnReset">Restaurar Defaults</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 80px;">ID</th>
+          <th style="width: 86px;">Preview</th>
+          <th>Nombre</th>
+          <th style="width: 120px;">Color</th>
+          <th style="width: 70px;">tx</th>
+          <th style="width: 70px;">ty</th>
+          <th style="width: 86px;">Animado</th>
+          <th style="width: 84px;">Frame ms</th>
+          <th style="width: 260px;">Frames (tx,ty)</th>
+          <th style="width: 90px;">Solido</th>
+          <th style="width: 110px;">Resbaladizo</th>
+          <th style="width: 95px;">Rompible</th>
+          <th style="width: 100px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tilesBody"></tbody>
+    </table>
+  </div>
+
+  <div id="status" class="panel status ok">Gestor de tiles listo.</div>
+
+  <script src="./src/tile-manager.js"></script>
+</body>
+</html>

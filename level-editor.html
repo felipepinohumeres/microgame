@@ -98,6 +98,15 @@
     button:hover { background: rgba(255, 255, 255, 0.18); }
     button.active { outline: 2px solid var(--accent); }
 
+    select {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-weight: 700;
+    }
+
     .back-link {
       display: inline-block;
       border: 1px solid rgba(255, 255, 255, 0.25);
@@ -171,6 +180,28 @@
       font-weight: 700;
     }
 
+    #inputDecorImage { width: 220px; }
+    #inputParallaxSky,
+    #inputParallaxFar,
+    #inputParallaxMid { width: 210px; }
+    #inputBgmFile,
+    #inputBgmSelect { width: 220px; }
+    #inputDecorX,
+    #inputDecorY,
+    #inputDecorScale,
+    #inputDecorAlpha,
+    #inputDecorDepth { width: 96px; }
+
+    .file-controls select {
+      width: 240px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 700;
+    }
+
     .advanced-panel {
       width: 100%;
       border: 1px solid rgba(255, 255, 255, 0.22);
@@ -223,6 +254,9 @@
     }
 
     .tile { background: var(--tile); }
+    .tile2 { background: #8f7a66; }
+    .tile3 { background: #6d8ba9; }
+    .tile4 { background: #b88ad1; }
     .empty { background: var(--empty); }
 
     .ok { color: var(--good); }
@@ -316,6 +350,93 @@
       textarea { min-height: 180px; }
     }
 
+    @media (min-width: 981px) {
+      body {
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow: hidden;
+        grid-template-columns: minmax(0, 1fr) 390px;
+        grid-template-rows: minmax(0, 1fr) auto;
+        align-items: stretch;
+      }
+
+      .toolbar {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        height: 100%;
+        overflow: auto;
+        align-content: flex-start;
+      }
+
+      .advanced-content > * {
+        width: 100%;
+      }
+
+      .level-manager,
+      .size-controls,
+      .file-controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
+      }
+
+      .level-manager select,
+      .size-controls input,
+      .file-controls input,
+      .file-controls select,
+      .level-manager button,
+      .size-controls button,
+      .file-controls button {
+        width: 100%;
+        min-width: 0;
+      }
+
+      #inputDecorImage,
+      #inputParallaxSky,
+      #inputParallaxFar,
+      #inputParallaxMid,
+      #inputDecorX,
+      #inputDecorY,
+      #inputDecorScale,
+      #inputDecorAlpha,
+      #inputDecorDepth {
+        width: 100%;
+      }
+
+      .layout {
+        grid-column: 1;
+        grid-row: 1;
+        min-height: 0;
+        grid-template-columns: 1fr;
+      }
+
+      .canvas-wrap {
+        min-height: 0;
+        height: 100%;
+        overflow: auto;
+      }
+
+      #editorCanvas {
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+      }
+
+      .bottom-panel {
+        grid-column: 1;
+        grid-row: 2;
+        max-height: 34dvh;
+        overflow: auto;
+      }
+
+      .bottom-panel:not([open]) {
+        max-height: 44px;
+        overflow: hidden;
+      }
+    }
+
     @media (max-width: 720px) {
       .toolbar {
         position: sticky;
@@ -377,6 +498,10 @@
         width: 100%;
       }
 
+      .file-controls select {
+        width: 100%;
+      }
+
       .canvas-wrap {
         padding: 4px;
       }
@@ -388,6 +513,8 @@
     <a class="back-link" href="./index.html">Volver Al Juego</a>
     <button id="toolPaint" class="active">Pintar Suelo</button>
     <button id="toolErase">Borrar</button>
+    <select id="paintTileType"></select>
+    <a class="back-link" href="./tile-manager.html">Gestor De Tiles</a>
     <details class="advanced-panel">
       <summary class="advanced-summary">Panel Avanzado</summary>
       <div class="advanced-content">
@@ -405,10 +532,39 @@
           <button id="btnResize">Aplicar Tamano</button>
         </div>
         <div class="file-controls">
+          <select id="inputParallaxAnchor">
+            <option value="top">Parallax: Anclado Arriba</option>
+            <option value="bottom">Parallax: Anclado Abajo</option>
+          </select>
+        </div>
+        <div class="file-controls">
+          <input id="inputParallaxSky" type="text" placeholder="bg_sky" />
+          <input id="inputParallaxFar" type="text" placeholder="bg_far" />
+          <input id="inputParallaxMid" type="text" placeholder="bg_mountains" />
+          <button id="btnParallaxFilesApply">Aplicar BG Parallax</button>
+        </div>
+        <div class="file-controls">
+          <select id="inputBgmSelect"></select>
+          <input id="inputBgmFile" type="text" placeholder="Arcade-Goblins" />
+          <button id="btnBgmApply">Aplicar BGM</button>
+        </div>
+        <div class="file-controls">
           <input id="inputLevelFile" type="text" placeholder="nivel-2" />
           <button id="btnLoadFile">Cargar Archivo</button>
         </div>
+        <div class="file-controls">
+          <input id="inputDecorImage" type="text" placeholder="decor_level_1" />
+          <input id="inputDecorX" type="number" step="1" placeholder="Decor X" />
+          <input id="inputDecorY" type="number" step="1" placeholder="Decor Y" />
+          <input id="inputDecorScale" type="number" step="0.01" placeholder="Escala" />
+          <input id="inputDecorAlpha" type="number" min="0" max="1" step="0.01" placeholder="Alpha" />
+          <input id="inputDecorDepth" type="number" step="0.1" placeholder="Depth" />
+          <button id="btnDecorApply">Aplicar Decor</button>
+          <button id="btnDecorClear">Quitar Decor</button>
+        </div>
         <button id="toolPlayer">Spawn Jugador</button>
+        <button id="toolEntryLeft">Spawn Entrada Izq</button>
+        <button id="toolEntryRight">Spawn Entrada Der</button>
         <button id="toolEnemy">Spawn Enemy</button>
         <button id="toolFlying">Spawn Flying</button>
         <button id="toolCharger">Spawn Charger</button>
@@ -423,6 +579,7 @@
         <button id="btnCopy">Copiar JSON</button>
         <button id="btnImport">Importar JSON</button>
         <button id="btnDownload">Descargar .json</button>
+        <button id="btnDownloadSvgGuide">Descargar Guia SVG</button>
       </div>
     </details>
   </div>
@@ -437,10 +594,7 @@
     <summary class="bottom-summary">Panel Inferior</summary>
     <div class="bottom-content">
       <aside class="side">
-        <div class="hint">
-          <div><span class="dot tile"></span> `0` = tile solido</div>
-          <div><span class="dot empty"></span> `-1` = vacio</div>
-        </div>
+        <div id="tileLegend" class="hint"></div>
         <div class="hint">
           Arrastrar clic izquierdo: pintar herramienta actual<br />
           Clic derecho: borrar rapido (tile o spawn cercano)
@@ -458,6 +612,8 @@
 
   <div id="spawnFloat" class="spawn-float" aria-label="Herramientas flotantes de spawn">
     <button type="button" data-tool-float="player">Jugador</button>
+    <button type="button" data-tool-float="entryLeft">Entrada Izq</button>
+    <button type="button" data-tool-float="entryRight">Entrada Der</button>
     <button type="button" data-tool-float="enemy">Enemy</button>
     <button type="button" data-tool-float="flying">Flying</button>
     <button type="button" data-tool-float="charger">Charger</button>

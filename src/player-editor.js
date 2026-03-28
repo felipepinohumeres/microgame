@@ -11,6 +11,7 @@ const FIELDS = [
   { key: "attackCooldownMs", label: "Cooldown Ataque (ms)", min: 80, max: 1000, step: 1, def: 220 },
   { key: "attackOffsetX", label: "Offset Ataque X", min: 8, max: 80, step: 1, def: 30 },
   { key: "attackOffsetY", label: "Offset Ataque Y", min: -40, max: 40, step: 1, def: -8 },
+  { key: "sfxVolume", label: "Volumen SFX", min: 0, max: 1, step: 0.01, def: 1 },
   { key: "maxLives", label: "Vidas Iniciales", min: 1, max: 5000, step: 1, def: 3 }
 ];
 
