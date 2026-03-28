@@ -10,6 +10,7 @@ const ACTIVE_LEVEL_ID_KEY = "microgame_level_active_id";
 const LEVEL_INDEX_STORAGE_KEY = "microgame_level_index_v1";
 const LEVEL_ENTRY_SIDE_KEY = "microgame_level_entry_side_v1";
 const LEVELS_MANIFEST_FILE = "./levels/manifest.json";
+const LEVELS_MANIFEST_SYNC_KEY = "microgame_levels_manifest_sync_v1";
 const TILE_DEFS_STORAGE_KEY = "microgame_tile_defs_v1";
 const TILESET_ATLAS_FILE = "./assets/tileset_platform.svg";
 const TILESET_ATLAS_TILE_SIZE = 32;
@@ -181,10 +182,6 @@ let lastBrokenTile = null;
 let animatedTileState = null;
 
 async function bootstrapLevelsFromFiles() {
-  if (hasUsableStoredCampaign()) {
-    return;
-  }
-
   try {
     const manifestResponse = await fetch(LEVELS_MANIFEST_FILE, { cache: "no-store" });
     if (!manifestResponse.ok) {
@@ -221,6 +218,11 @@ async function bootstrapLevelsFromFiles() {
       return;
     }
 
+    const signature = buildManifestSignature(loaded);
+    if (!shouldApplyManifestCampaign(loaded, signature)) {
+      return;
+    }
+
     const requestedActiveId = typeof manifest?.activeId === "string" ? manifest.activeId.trim() : "";
     const activeId = loaded.some((lvl) => lvl.id === requestedActiveId) ? requestedActiveId : loaded[0].id;
 
@@ -230,22 +232,51 @@ async function bootstrapLevelsFromFiles() {
     }));
     localStorage.setItem(ACTIVE_LEVEL_ID_KEY, activeId);
     localStorage.setItem(LEVEL_INDEX_STORAGE_KEY, "0");
+    localStorage.setItem(LEVELS_MANIFEST_SYNC_KEY, signature);
   } catch {
     // Sin bloqueo: el juego cae al flujo local/default si no se puede leer el manifiesto.
   }
 }
 
-function hasUsableStoredCampaign() {
+function shouldApplyManifestCampaign(manifestLevels, signature) {
+  const stored = getStoredCampaignState();
+  if (!stored || !Array.isArray(stored.levels) || !stored.levels.length) {
+    return true;
+  }
+
+  const storedIds = new Set(
+    stored.levels
+      .map((lvl) => (typeof lvl?.id === "string" ? lvl.id.trim() : ""))
+      .filter((id) => id.length > 0)
+  );
+  const manifestIds = manifestLevels.map((lvl) => lvl.id);
+  const hasAllManifestLevels = manifestIds.every((id) => storedIds.has(id));
+  if (!hasAllManifestLevels) {
+    return true;
+  }
+
+  const storedSignature = localStorage.getItem(LEVELS_MANIFEST_SYNC_KEY) || "";
+  if (storedSignature !== signature && stored.levels.length < manifestLevels.length) {
+    return true;
+  }
+
+  return false;
+}
+
+function getStoredCampaignState() {
   try {
     const raw = localStorage.getItem(LEVELS_STORAGE_KEY);
     if (!raw) {
-      return false;
+      return null;
     }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.levels) && parsed.levels.length > 0;
+    return JSON.parse(raw);
   } catch {
-    return false;
+    return null;
   }
+}
+
+function buildManifestSignature(levels) {
+  return levels.map((lvl) => `${lvl.id}:${lvl.name}`).join("|");
 }
 
 function preload() {

@@ -8,6 +8,7 @@ const STORAGE_KEY = "microgame_level_v1";
 const LEVELS_STORAGE_KEY = "microgame_levels_v1";
 const ACTIVE_LEVEL_ID_KEY = "microgame_level_active_id";
 const LEVELS_MANIFEST_FILE = "./levels/manifest.json";
+const LEVELS_MANIFEST_SYNC_KEY = "microgame_levels_manifest_sync_v1";
 const TILE_DEFS_STORAGE_KEY = "microgame_tile_defs_v1";
 const ASSET_EXTENSIONS = [".png", ".svg", ".webp", ".jpg", ".jpeg"];
 const MUSIC_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
@@ -135,10 +136,6 @@ async function bootstrapEditor() {
 }
 
 async function bootstrapLevelsCatalogFromFiles() {
-  if (hasUsableStoredCatalog()) {
-    return;
-  }
-
   try {
     const manifestResponse = await fetch(LEVELS_MANIFEST_FILE, { cache: "no-store" });
     if (!manifestResponse.ok) {
@@ -181,6 +178,11 @@ async function bootstrapLevelsCatalogFromFiles() {
       return;
     }
 
+    const signature = buildManifestSignature(loadedLevels);
+    if (!shouldApplyManifestCatalog(loadedLevels, signature)) {
+      return;
+    }
+
     const requestedActiveId = typeof manifest?.activeId === "string" ? manifest.activeId.trim() : "";
     const activeId = loadedLevels.some((lvl) => lvl.id === requestedActiveId) ? requestedActiveId : loadedLevels[0].id;
     const activeRecord = loadedLevels.find((lvl) => lvl.id === activeId) || loadedLevels[0];
@@ -190,6 +192,7 @@ async function bootstrapLevelsCatalogFromFiles() {
       activeId
     }));
     localStorage.setItem(ACTIVE_LEVEL_ID_KEY, activeId);
+    localStorage.setItem(LEVELS_MANIFEST_SYNC_KEY, signature);
     if (activeRecord?.payload) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(activeRecord.payload));
     }
@@ -198,17 +201,45 @@ async function bootstrapLevelsCatalogFromFiles() {
   }
 }
 
-function hasUsableStoredCatalog() {
+function shouldApplyManifestCatalog(manifestLevels, signature) {
+  const stored = getStoredCatalogState();
+  if (!stored || !Array.isArray(stored.levels) || !stored.levels.length) {
+    return true;
+  }
+
+  const storedIds = new Set(
+    stored.levels
+      .map((lvl) => (typeof lvl?.id === "string" ? lvl.id.trim() : ""))
+      .filter((id) => id.length > 0)
+  );
+  const manifestIds = manifestLevels.map((lvl) => lvl.id);
+  const hasAllManifestLevels = manifestIds.every((id) => storedIds.has(id));
+  if (!hasAllManifestLevels) {
+    return true;
+  }
+
+  const storedSignature = localStorage.getItem(LEVELS_MANIFEST_SYNC_KEY) || "";
+  if (storedSignature !== signature && stored.levels.length < manifestLevels.length) {
+    return true;
+  }
+
+  return false;
+}
+
+function getStoredCatalogState() {
   try {
     const raw = localStorage.getItem(LEVELS_STORAGE_KEY);
     if (!raw) {
-      return false;
+      return null;
     }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.levels) && parsed.levels.length > 0;
+    return JSON.parse(raw);
   } catch {
-    return false;
+    return null;
   }
+}
+
+function buildManifestSignature(levels) {
+  return levels.map((lvl) => `${lvl.id}:${lvl.name}`).join("|");
 }
 
 function wireUI() {
