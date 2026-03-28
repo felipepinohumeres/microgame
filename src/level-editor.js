@@ -7,6 +7,7 @@ const WORLD_TILE_SIZE = 32;
 const STORAGE_KEY = "microgame_level_v1";
 const LEVELS_STORAGE_KEY = "microgame_levels_v1";
 const ACTIVE_LEVEL_ID_KEY = "microgame_level_active_id";
+const LEVELS_MANIFEST_FILE = "./levels/manifest.json";
 const TILE_DEFS_STORAGE_KEY = "microgame_tile_defs_v1";
 const ASSET_EXTENSIONS = [".png", ".svg", ".webp", ".jpg", ".jpeg"];
 const MUSIC_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
@@ -105,23 +106,110 @@ let levelBgmFile = getDefaultBgmFile();
 let levelDecorLayer = null;
 let tileDefinitions = loadTileDefinitions();
 
-let levelsState = loadLevelsState();
-let currentLevelId = resolveCurrentLevelId(levelsState);
+let levelsState = { levels: [], activeId: "" };
+let currentLevelId = "";
 
-wireUI();
-syncTileDefinitionsUI();
-syncBgmSelect();
-applyCurrentLevelFromCatalog();
-refreshLevelSelect();
-syncSizeInputs();
-render();
-setStatus("Editor listo.", "ok");
-syncTouchModeUI();
-window.addEventListener("focus", () => {
-  tileDefinitions = loadTileDefinitions();
+bootstrapEditor();
+
+async function bootstrapEditor() {
+  await bootstrapLevelsCatalogFromFiles();
+
+  levelsState = loadLevelsState();
+  currentLevelId = resolveCurrentLevelId(levelsState);
+
+  wireUI();
   syncTileDefinitionsUI();
+  syncBgmSelect();
+  applyCurrentLevelFromCatalog();
+  refreshLevelSelect();
+  syncSizeInputs();
   render();
-});
+  setStatus("Editor listo.", "ok");
+  syncTouchModeUI();
+
+  window.addEventListener("focus", () => {
+    tileDefinitions = loadTileDefinitions();
+    syncTileDefinitionsUI();
+    render();
+  });
+}
+
+async function bootstrapLevelsCatalogFromFiles() {
+  if (hasUsableStoredCatalog()) {
+    return;
+  }
+
+  try {
+    const manifestResponse = await fetch(LEVELS_MANIFEST_FILE, { cache: "no-store" });
+    if (!manifestResponse.ok) {
+      return;
+    }
+
+    const manifest = await manifestResponse.json();
+    const entries = Array.isArray(manifest?.levels) ? manifest.levels : [];
+    if (!entries.length) {
+      return;
+    }
+
+    const loadedLevels = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const file = typeof entry?.file === "string" ? entry.file.trim() : "";
+      if (!file) {
+        continue;
+      }
+      const filePath = file.startsWith("./") ? file : `./levels/${file.replace(/^[/\\]+/, "")}`;
+      const response = await fetch(filePath, { cache: "no-store" });
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = await response.json();
+      const parsedPayload = parseLevel(payload);
+      if (!parsedPayload) {
+        continue;
+      }
+
+      loadedLevels.push({
+        id: typeof entry?.id === "string" && entry.id.trim() ? entry.id.trim() : `level_${i + 1}`,
+        name: typeof entry?.name === "string" && entry.name.trim() ? entry.name.trim() : `Nivel ${i + 1}`,
+        payload: parsedPayload
+      });
+    }
+
+    if (!loadedLevels.length) {
+      return;
+    }
+
+    const requestedActiveId = typeof manifest?.activeId === "string" ? manifest.activeId.trim() : "";
+    const activeId = loadedLevels.some((lvl) => lvl.id === requestedActiveId) ? requestedActiveId : loadedLevels[0].id;
+    const activeRecord = loadedLevels.find((lvl) => lvl.id === activeId) || loadedLevels[0];
+
+    localStorage.setItem(LEVELS_STORAGE_KEY, JSON.stringify({
+      levels: loadedLevels,
+      activeId
+    }));
+    localStorage.setItem(ACTIVE_LEVEL_ID_KEY, activeId);
+    if (activeRecord?.payload) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(activeRecord.payload));
+    }
+  } catch {
+    // Si no se puede leer el manifiesto, el editor sigue con modo local/default.
+  }
+}
+
+function hasUsableStoredCatalog() {
+  try {
+    const raw = localStorage.getItem(LEVELS_STORAGE_KEY);
+    if (!raw) {
+      return false;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.levels) && parsed.levels.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 function wireUI() {
   Object.entries(tools).forEach(([key, btn]) => {

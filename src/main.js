@@ -9,6 +9,7 @@ const LEVELS_STORAGE_KEY = "microgame_levels_v1";
 const ACTIVE_LEVEL_ID_KEY = "microgame_level_active_id";
 const LEVEL_INDEX_STORAGE_KEY = "microgame_level_index_v1";
 const LEVEL_ENTRY_SIDE_KEY = "microgame_level_entry_side_v1";
+const LEVELS_MANIFEST_FILE = "./levels/manifest.json";
 const TILE_DEFS_STORAGE_KEY = "microgame_tile_defs_v1";
 const TILESET_ATLAS_FILE = "./assets/tileset_platform.svg";
 const TILESET_ATLAS_TILE_SIZE = 32;
@@ -128,7 +129,12 @@ const config = {
   }
 };
 
-new Phaser.Game(config);
+bootstrapGame();
+
+async function bootstrapGame() {
+  await bootstrapLevelsFromFiles();
+  new Phaser.Game(config);
+}
 
 let player;
 let cursors;
@@ -173,6 +179,74 @@ let currentLevelIds = [];
 let transitioningLevel = false;
 let lastBrokenTile = null;
 let animatedTileState = null;
+
+async function bootstrapLevelsFromFiles() {
+  if (hasUsableStoredCampaign()) {
+    return;
+  }
+
+  try {
+    const manifestResponse = await fetch(LEVELS_MANIFEST_FILE, { cache: "no-store" });
+    if (!manifestResponse.ok) {
+      return;
+    }
+
+    const manifest = await manifestResponse.json();
+    const entries = Array.isArray(manifest?.levels) ? manifest.levels : [];
+    if (!entries.length) {
+      return;
+    }
+
+    const loaded = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const file = typeof entry?.file === "string" ? entry.file.trim() : "";
+      if (!file) {
+        continue;
+      }
+      const filePath = file.startsWith("./") ? file : `./levels/${file.replace(/^[/\\]+/, "")}`;
+      const response = await fetch(filePath, { cache: "no-store" });
+      if (!response.ok) {
+        continue;
+      }
+      const payload = await response.json();
+      loaded.push({
+        id: typeof entry?.id === "string" && entry.id.trim() ? entry.id.trim() : `level_${i + 1}`,
+        name: typeof entry?.name === "string" && entry.name.trim() ? entry.name.trim() : `Nivel ${i + 1}`,
+        payload
+      });
+    }
+
+    if (!loaded.length) {
+      return;
+    }
+
+    const requestedActiveId = typeof manifest?.activeId === "string" ? manifest.activeId.trim() : "";
+    const activeId = loaded.some((lvl) => lvl.id === requestedActiveId) ? requestedActiveId : loaded[0].id;
+
+    localStorage.setItem(LEVELS_STORAGE_KEY, JSON.stringify({
+      levels: loaded,
+      activeId
+    }));
+    localStorage.setItem(ACTIVE_LEVEL_ID_KEY, activeId);
+    localStorage.setItem(LEVEL_INDEX_STORAGE_KEY, "0");
+  } catch {
+    // Sin bloqueo: el juego cae al flujo local/default si no se puede leer el manifiesto.
+  }
+}
+
+function hasUsableStoredCampaign() {
+  try {
+    const raw = localStorage.getItem(LEVELS_STORAGE_KEY);
+    if (!raw) {
+      return false;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.levels) && parsed.levels.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 function preload() {
   const preloadParallaxFiles = getPreloadParallaxFiles();

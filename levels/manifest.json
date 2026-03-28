@@ -1,0 +1,7 @@
+{
+  "activeId": "nivel-1",
+  "levels": [
+    { "id": "nivel-1", "name": "Nivel 1", "file": "nivel-1.json" },
+    { "id": "nivel-2", "name": "Nivel 2", "file": "nivel-2.json" }
+  ]
+}
